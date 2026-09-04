@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>滑动变宽器 · 宽系强度校准器</title>
+<style>
+:root{--accent:#c2242b;--gold:#d8b46a;--bg:#d6d7d1;--ink:#1b1b19;--muted:#5a5a54;--line:#a2a29b}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%}
+body{display:flex;flex-direction:column;background:var(--bg);color:var(--ink);font-family:"Noto Sans SC","Microsoft YaHei",system-ui,sans-serif;overflow:hidden;transition:background-color .6s ease,color .6s ease}
+header{display:flex;justify-content:space-between;align-items:flex-start;padding:20px 34px 12px;background:var(--bg);transition:background-color .6s ease}
+.eyebrow{font-size:11px;letter-spacing:.35em;color:var(--muted)}
+h1{font-family:"Noto Serif SC","Songti SC","SimSun",serif;font-size:34px;font-weight:700;letter-spacing:.08em;margin-top:4px}
+.readout{text-align:right}
+.ro-label{font-size:11px;letter-spacing:.3em;color:var(--muted)}
+.ro-value{font-size:26px;font-weight:600;font-variant-numeric:tabular-nums;margin-top:2px}
+.ro-stage{font-size:12px;color:var(--muted);margin-top:2px;letter-spacing:.15em}
+main{position:relative;flex:1;overflow:hidden;background:var(--bg);transition:background-color .6s ease}
+.frame{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;will-change:opacity;user-select:none;-webkit-user-drag:none}
+.scan{position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,rgba(0,0,0,.05) 0 1px,transparent 1px 4px);mix-blend-mode:overlay;opacity:.45}
+.vignette{position:absolute;inset:0;pointer-events:none;background:radial-gradient(120% 90% at 50% 45%,transparent 62%,rgba(0,0,0,.16))}
+.badge{position:absolute;top:14px;left:50%;transform:translateX(-50%);padding:8px 20px;border:1px solid rgba(216,180,106,.8);color:#e8cf9a;background:rgba(20,16,10,.55);font-size:13px;letter-spacing:.22em;opacity:0;transition:opacity .5s;backdrop-filter:blur(4px);white-space:nowrap}
+.badge.show{opacity:1}
+footer{padding:8px 56px 14px;background:var(--bg);transition:background-color .6s ease}
+.slider{position:relative;height:80px;cursor:pointer;touch-action:none}
+.track{position:absolute;left:0;right:0;top:30px;height:2px;background:var(--line)}
+.fill{position:absolute;left:0;top:0;bottom:0;width:0;background:linear-gradient(90deg,#8d1a20,#c2242b);box-shadow:0 0 10px rgba(194,36,43,.65)}
+.tick{position:absolute;top:24px;width:1px;height:12px;background:var(--line)}
+.tick.major{top:20px;height:20px;width:2px}
+.tick.on{background:var(--accent)}
+.knob{position:absolute;top:31px;width:22px;height:22px;border-radius:50%;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.35);transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;pointer-events:none}
+.knob::after{content:"";width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 6px rgba(194,36,43,.8)}
+.labels span{position:absolute;top:54px;transform:translateX(-50%);font-size:13px;letter-spacing:.12em;color:var(--muted);transition:color .3s;white-space:nowrap;cursor:pointer}
+
+
+.labels span.active{color:var(--ink);font-weight:700}
+.labels span.hidden-stage{color:#b98f3f}
+.hint{text-align:center;font-size:12px;color:var(--muted);letter-spacing:.25em;margin-top:2px}
+@media (max-width:760px){h1{font-size:24px}.ro-value{font-size:20px}footer{padding:8px 20px 12px}.labels span{font-size:11px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="eyebrow">KUAN INTENSITY CALIBRATOR</div>
+    <h1>滑动变宽器</h1>
+  </div>
+  <div class="readout">
+    <div class="ro-label">变宽程度</div>
+    <div class="ro-value"><span id="val">00</span> / 35</div>
+    <div class="ro-stage">阶段 <span id="stageNo">01</span> / 07</div>
+  </div>
+</header>
+<main id="stage">
+  <img class="frame" src="assets/stages/s1.jpg" alt="小菜宽">
+  <img class="frame" src="assets/stages/s2.jpg" alt="牢宽">
+  <img class="frame" src="assets/stages/s3.jpg" alt="宽子">
+  <img class="frame" src="assets/stages/s4.jpg" alt="宽圣">
+  <img class="frame" src="assets/stages/s5.jpg" alt="宽神">
+  <img class="frame" src="assets/stages/s6.jpg" alt="宽祖">
+  <img class="frame" src="assets/stages/s7.jpg" alt="宽仙">
+  <div class="scan"></div>
+  <div class="vignette"></div>
+  <div class="badge" id="badge">✦ 隐藏阶段觉醒 · 宽仙</div>
+</main>
+<footer>
+  <div class="slider" id="slider">
+    <div class="track" id="track"><div class="fill" id="fill"></div></div>
+    <div id="ticks"></div>
+    <div class="knob" id="knob"></div>
+    <div class="labels" id="labels"></div>
+  </div>
+  <div class="hint">— 拖动滑块以增强宽系浓度 —</div>
+</footer>
+<script>
+(function(){
+  var NAMES=["小菜宽","牢宽","宽子","宽圣","宽神","宽祖","宽仙"];
+  var A=[0,6,12,18,24,30,35], MAX=35;
+  var THEMES=[
+    {bg:"#d6d7d1",ink:"#1b1b19",muted:"#5a5a54",line:"#a2a29b"},
+    {bg:"#c5c4c0",ink:"#1b1b19",muted:"#575651",line:"#93928c"},
+    {bg:"#93938f",ink:"#161614",muted:"#3f3f3a",line:"#75756f"},
+    {bg:"#5e5e5c",ink:"#f4f3ef",muted:"#c6c5c0",line:"#8b8b86"},
+    {bg:"#343433",ink:"#f2e9d7",muted:"#b5a88c",line:"#6d6459"},
+    {bg:"#1d1d1a",ink:"#efdeb5",muted:"#a8946c",line:"#5d5241"},
+    {bg:"#262622",ink:"#f3e9d4",muted:"#b3a68a",line:"#675d4d"}
+  ];
+  var frames=[].slice.call(document.querySelectorAll(".frame"));
+  var valEl=document.getElementById("val"), stageNo=document.getElementById("stageNo");
+  var knob=document.getElementById("knob"), fill=document.getElementById("fill");
+  var track=document.getElementById("track"), slider=document.getElementById("slider");
+  var badge=document.getElementById("badge"), ticksBox=document.getElementById("ticks"), labelsBox=document.getElementById("labels");
+  var tickEls=[], labelEls=[];
+  for(var v=0;v<=MAX;v++){
+    var t=document.createElement("div");
+    t.className="tick"+(A.indexOf(v)>=0?" major":"");
+    t.style.left=(v/MAX*100)+"%";
+    ticksBox.appendChild(t); tickEls.push(t);
+  }
+  NAMES.forEach(function(n,i){
+    var s=document.createElement("span");
+    s.textContent=(i===6?"✦ ":"")+n;
+    s.style.left=(A[i]/MAX*100)+"%";
+    if(i===0)s.className="first"; if(i===NAMES.length-1)s.className="last hidden-stage";
+    s.addEventListener("click",function(e){e.stopPropagation();target=A[i];});
+    s.addEventListener("pointerdown",function(e){e.stopPropagation();});
+    labelsBox.appendChild(s); labelEls.push(s);
+  });
+  var target=0, shown=0, curStage=-1, dragging=false;
+  function seg(x){var i=0;while(i<A.length-2&&x>A[i+1])i++;return i;}
+  function applyTheme(st){
+    var th=THEMES[st], r=document.documentElement.style;
+    r.setProperty("--bg",th.bg); r.setProperty("--ink",th.ink);
+    r.setProperty("--muted",th.muted); r.setProperty("--line",th.line);
+  }
+  function render(v){
+    var i=seg(v), t=(v-A[i])/(A[i+1]-A[i]), s=t*t*(3-2*t);
+    frames.forEach(function(f,k){f.style.opacity=(k===i?(1-s):(k===i+1?s:0));});
+    var st=(s<0.5?i:i+1);
+    if(st!==curStage){
+      curStage=st; applyTheme(st);
+      stageNo.textContent=String(st+1).padStart(2,"0");
+      labelEls.forEach(function(el,k){el.classList.toggle("active",k===st);});
+      badge.classList.toggle("show",st===6);
+    }
+    valEl.textContent=String(Math.round(v)).padStart(2,"0");
+    var pct=(v/MAX*100)+"%";
+    knob.style.left=pct; fill.style.width=pct;
+    tickEls.forEach(function(el,k){el.classList.toggle("on",k<=v);});
+  }
+  function loop(){
+    shown+=(target-shown)*0.22;
+    if(Math.abs(target-shown)<0.01)shown=target;
+    render(shown);
+    requestAnimationFrame(loop);
+  }
+  function fromEvent(e){
+    var r=track.getBoundingClientRect();
+    var x=Math.min(Math.max(e.clientX-r.left,0),r.width);
+    target=x/r.width*MAX;
+  }
+  slider.addEventListener("pointerdown",function(e){dragging=true;slider.setPointerCapture(e.pointerId);fromEvent(e);});
+  slider.addEventListener("pointermove",function(e){if(dragging)fromEvent(e);});
+  slider.addEventListener("pointerup",function(){dragging=false;});
+  slider.addEventListener("pointercancel",function(){dragging=false;});
+  slider.addEventListener("dblclick",function(){target=(target>0?0:MAX);});
+  window.addEventListener("wheel",function(e){e.preventDefault();target=Math.min(MAX,Math.max(0,target+(e.deltaY<0?1:-1)));},{passive:false});
+  window.addEventListener("keydown",function(e){
+    if(e.key==="ArrowRight"||e.key==="ArrowUp")target=Math.min(MAX,target+1);
+    else if(e.key==="ArrowLeft"||e.key==="ArrowDown")target=Math.max(0,target-1);
+    else if(e.key==="Home")target=0;
+    else if(e.key==="End")target=MAX;
+  });
+  render(0); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
